@@ -1,0 +1,5 @@
+*~
+*.pyc
+wget-lua
+data/
+archives-gov-old.lua

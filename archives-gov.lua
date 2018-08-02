@@ -1,6 +1,5 @@
 dofile("urlcode.lua")
 dofile("table_show.lua")
-JSON = (loadfile "JSON.lua")()
 
 local item_type = os.getenv('item_type')
 local item_value = os.getenv('item_value')
@@ -8,9 +7,6 @@ local item_dir = os.getenv('item_dir')
 local warc_file_base = os.getenv('warc_file_base')
 
 local items = {}
-local discousers = {}
-local discovideos = {}
-local discotags = {}
 
 local url_count = 0
 local tries = 0
@@ -46,11 +42,32 @@ read_file = function(file)
   end
 end
 
-allowed = function(url)
+allowed = function(url, parenturl)
   if string.match(url, "'+")
      or string.match(url, "[<>\\]")
      or string.match(url, "//$") then
     return false
+  end
+
+  if string.match(url, "/id/[0-9]+$") then
+    if items[tonumber(string.match(url, "/id/([0-9]+)$"))] ~= true then
+      return false
+    end
+  end
+
+  if parenturl ~= nil then
+    local num = string.match(parenturl, "^https?://catalog%.archives%.gov/OpaAPI/iapi/v1/id/([0-9]+)$")
+    if num ~= nil then
+      if items[tonumber(num)] == true then
+        return true
+      end
+    end
+  end
+
+  if string.match(url, "_files/[0-9]+/[0-9]+_[0-9]+%.[^%.%?=]+$")
+      or string.match(url, "%?download=[a-z]+$")
+      or string.match(url, "%.dzi$") then
+    return true
   end
 
   for s in string.gmatch(url, "([0-9]+)") do
@@ -71,21 +88,36 @@ sorted = function(t)
   return t_sorted
 end
 
+merge_query_strings = function(newurl, t)
+  for _, arg in ipairs(sorted(t)) do
+    newurl = newurl .. arg .. "=" .. t[arg] .. "&"
+  end
+  if string.match(newurl, "^.+&$") then
+    newurl = string.match(newurl, "^(.+)&$")
+  end
+  return newurl
+end
+
+extract_query_string = function(newurl)
+  local query_strings = {}
+  for query_string in string.gmatch(string.match(newurl, "%?(.+)$"), "([^&]+)") do
+    local key, val = string.match(query_string, "^(.+)=(.+)$")
+    query_strings[key] = val
+  end
+  return query_strings
+end
+
 wget.callbacks.download_child_p = function(urlpos, parent, depth, start_url_parsed, iri, verdict, reason)
   local url = urlpos["url"]["url"]
   local html = urlpos["link_expect_html"]
 
-  if string.match(url, '"') then
-    return false
-  end
-
   if (downloaded[url] ~= true and addedtolist[url] ~= true)
-     and (allowed(url) or html == 0) then
+     and (allowed(url, parent["url"]) or html == 0) then
     addedtolist[url] = true
     return true
-  else
-    return false
   end
+
+  return false
 end
 
 wget.callbacks.get_urls = function(file, url, is_css, iri)
@@ -93,16 +125,6 @@ wget.callbacks.get_urls = function(file, url, is_css, iri)
   local html = nil
 
   downloaded[url] = true
-
-  local function merge_query_strings(newurl, t)
-    for _, arg in ipairs(sorted(t)) do
-      newurl = newurl .. arg .. "=" .. t[arg] .. "&"
-    end
-    if string.match(newurl, "^.+&$") then
-      newurl = string.match(newurl, "^(.+)&$")
-    end
-    return newurl
-  end
 
   local function basic_search(surl)
     local query_strings = {}
@@ -115,10 +137,9 @@ wget.callbacks.get_urls = function(file, url, is_css, iri)
     query_strings["rows"] = "0"
     query_strings["tabType"] = "all"
 
-    for query_string in string.gmatch(string.match(surl, "%?(.+)$"), "([^&]+)") do
-      if not (string.match(query_string, "offset=") or string.match(query_string, "tabType=")) then
-        local arg, val = string.match(query_string, "^(.+)=(.+)$")
-        query_strings[arg] = val
+    for k, v in pairs(extract_query_string(surl)) do
+      if k ~= "offset" and k ~= "tabType" then
+        query_strings[k] = v
       end
     end
 
@@ -140,9 +161,8 @@ wget.callbacks.get_urls = function(file, url, is_css, iri)
       query_strings["tabType"] = "all"
     end
 
-    for query_string in string.gmatch(string.match(surl, "%?(.+)$"), "([^&]+)") do
-      local arg, val = string.match(query_string, "^(.+)=(.+)$")
-      query_strings[arg] = val
+    for k, v in pairs(extract_query_string(surl)) do
+      query_strings[k] = v
     end
 
     check(merge_query_strings("https://catalog.archives.gov/OpaAPI/iapi/v1?", query_strings))
@@ -163,22 +183,24 @@ wget.callbacks.get_urls = function(file, url, is_css, iri)
       check(surl .. "&offset=0&tabType=video")
     end
   end
-
+  
   function check(urla)
     local origurl = url
     local url = string.match(urla, "^([^#]+)")
-    local urlextract = string.gsub(string.gsub(url, "&amp;", "&"), " ", "+")
+    local url_ = string.gsub(string.gsub(url, "&amp;", "&"), " ", "+")
 
-    if string.match(urlextract, "^https?://catalog%.archives%.gov/search%?") then
-      basic_search(urlextract)
-      specific_search(urlextract)
+    if string.match(url_, "^https?://catalog%.archives%.gov/search%?") then
+      abortgrab = true
+      print('Not sure what to do with this yet. aborting for now...')
+      --basic_search(url_)
+      --specific_search(url_)
     end
-      
-    if (downloaded[url] ~= true and addedtolist[url] ~= true)
-       and allowed(url) then
-      table.insert(urls, { url=string.gsub(url, "&amp;", "&") })
+
+    if (downloaded[url_] ~= true and addedtolist[url_] ~= true)
+       and allowed(url_, origurl) then
+      table.insert(urls, { url=url_ })
+      addedtolist[url_] = true
       addedtolist[url] = true
-      addedtolist[string.gsub(url, "&amp;", "&")] = true
     end
   end
 
@@ -204,21 +226,75 @@ wget.callbacks.get_urls = function(file, url, is_css, iri)
     if string.match(newurl, "^%?") then
       check(string.match(url, "^(https?://[^%?]+)")..newurl)
     elseif not (string.match(newurl, "^https?:\\?/\\?//?/?")
-        or string.match(newurl, "^[/\\]")
-        or string.match(newurl, "^[jJ]ava[sS]cript:")
-        or string.match(newurl, "^[mM]ail[tT]o:")
-        or string.match(newurl, "^android%-app:")
-        or string.match(newurl, "^%${")) then
+       or string.match(newurl, "^[/\\]")
+       or string.match(newurl, "^[jJ]ava[sS]cript:")
+       or string.match(newurl, "^[mM]ail[tT]o:")
+       or string.match(newurl, "^vine:")
+       or string.match(newurl, "^android%-app:")
+       or string.match(newurl, "^%${")) then
       check(string.match(url, "^(https?://.+/)")..newurl)
     end
   end
+
+  if string.match(url, "^https?://catalog%.archives%.gov/OpaAPI/media/[0-9]+/")
+      and status_code ~= 404 and not string.match(url, "download=")
+      and not string.match(url, "_files/[0-9]+/[0-9]+_[0-9]+%.[^%.%?=]+$") then
+    check(url .. "?download=true")
+    check(url .. "?download=false")
+  end
+
+  --if string.match(url, "%.dzi$") then
+  --  html = read_file(file)
+  --  local tilesize = string.match(html, 'TileSize="([0-9]+)"')
+  --  local height_full = tonumber(string.match(html, 'Height="([0-9]+)"'))
+  --  local width_full = tonumber(string.match(html, 'Width="([0-9]+)"'))
+  --  local format = string.match(html, 'Format="([^"]+)"')
+  --  local prefix = string.match(url, "^(.+)%.dzi$") .. "_files/"
+  --  local max_dimension = math.max(height_full, width_full)
+  --  for level=0,math.ceil(math.log(max_dimension)/math.log(2)) do
+  --    local size = math.pow(2, level)
+  --    for x=0,math.ceil(size/tilesize) do
+  --      for y=0,math.ceil(size/tilesize) do
+  --        print(prefix .. level .. "/" .. x .. "_" .. y .. "." .. format)
+  --        check(prefix .. level .. "/" .. x .. "_" .. y .. "." .. format)
+  --      end
+  --    end
+  --  end
+  --end
+
+  if string.match(url, "%.dzi$") and status_code ~= 404 then
+    html = read_file(file)
+    local format = string.match(html, 'Format="([^"]+)"')
+    if format == nil then
+      abortgrab = true
+    else
+      check(string.match(url, "^(.+)%.dzi$") .. "_files/0/0_0." .. format)
+    end
+  end
+
+  if string.match(url, "_files/[0-9]+/[0-9]+_[0-9]+%.[^%.%?=]+$") then
+    local base, level, x, y, format = string.match(url, "^(.+_files/)([0-9]+)/([0-9]+)_([0-9]+)%.([^%.]+)$")
+    level = tonumber(level)
+    x = tonumber(x)
+    y = tonumber(y)
+    if status_code == 404 then
+      if y ~= 0 then
+        check(base .. level .. "/" .. x+1 .. "_0." .. format)
+      elseif x ~= 0 then
+        check(base .. level+1 .. "/0_0." .. format)
+      end
+    else
+      check(base .. level .. "/" .. x .. "_" .. y+1 ..  "." .. format)
+    end
+  end
   
-  if allowed(url) then
+  if allowed(url, nil) and not string.match(url, "/OpaAPI/media/")
+      and not string.match(url, "^https?://[^/]+%.cloudfront%.net/")
+      and not string.match(url, "^https?://s3%.amazonaws%.com") then
     html = read_file(file)
 
     if string.match(url, "^https?://catalog%.archives%.gov/[^/]*/?iapi/v1.+$") then
-      local start = string.match(url, "^(https?://catalog%.archives%.gov/)[^/]*/?iapi/v1.+$")
-      local end_ = string.match(url, "^https?://catalog%.archives%.gov/[^/]*/?(iapi/v1.+)$")
+      local start, end_ = string.match(url, "^(https?://catalog%.archives%.gov/)[^/]*/?(iapi/v1.+)$")
       check(start .. end_)
       check(start .. "OpaAPI/" .. end_)
     end
@@ -230,8 +306,8 @@ wget.callbacks.get_urls = function(file, url, is_css, iri)
           checknewurl(path)
         else
           checknewurl("https:\\/\\/catalog.archives.gov\\/OpaAPI\\/media\\/" .. itemid .. "\\/" .. path)
-          checknewurl("https:\\/\\/catalog.archives.gov\\/OpaAPI\\/media\\/" .. itemid .. "\\/" .. path .. "?download=true")
-          checknewurl("https:\\/\\/catalog.archives.gov\\/OpaAPI\\/media\\/" .. itemid .. "\\/" .. path .. "?download=false")
+          --checknewurl("https:\\/\\/catalog.archives.gov\\/OpaAPI\\/media\\/" .. itemid .. "\\/" .. path .. "?download=true")
+          --checknewurl("https:\\/\\/catalog.archives.gov\\/OpaAPI\\/media\\/" .. itemid .. "\\/" .. path .. "?download=false")
         end
       end
     end
@@ -243,29 +319,32 @@ wget.callbacks.get_urls = function(file, url, is_css, iri)
       checknewurl(newurl)
     end
     for newurl in string.gmatch(html, ">%s*([^<%s]+)") do
-      checknewurl(newurl)
+       checknewurl(newurl)
     end
-    for newurl in string.gmatch(html, "href='([^']+)'") do
+    for newurl in string.gmatch(html, "[^%-]href='([^']+)'") do
       checknewshorturl(newurl)
     end
-    for newurl in string.gmatch(html, 'href="([^"]+)"') do
+    for newurl in string.gmatch(html, '[^%-]href="([^"]+)"') do
       checknewshorturl(newurl)
+    end
+    for newurl in string.gmatch(html, ":%s*url%(([^%)]+)%)") do
+      check(newurl)
     end
   end
 
   return urls
 end
-  
 
 wget.callbacks.httploop_result = function(url, err, http_stat)
   status_code = http_stat["statcode"]
-  
+
   url_count = url_count + 1
-  io.stdout:write(url_count .. "=" .. status_code .. " " .. url["url"] .. ".  \n")
+  io.stdout:write(url_count .. "=" .. status_code .. " " .. url["url"] .. "  \n")
   io.stdout:flush()
 
   if (status_code >= 200 and status_code <= 399) then
     downloaded[url["url"]] = true
+    downloaded[string.gsub(url["url"], "https?://", "http://")] = true
   end
 
   if abortgrab == true then
@@ -274,7 +353,7 @@ wget.callbacks.httploop_result = function(url, err, http_stat)
   end
   
   if status_code >= 500 or
-    (status_code >= 400 and status_code ~= 404 and status_code ~= 410) or
+    (status_code >= 400 and status_code ~= 404) or
     status_code == 0 then
     io.stdout:write("Server returned "..http_stat.statcode.." ("..err.."). Sleeping.\n")
     io.stdout:flush()
@@ -284,7 +363,7 @@ wget.callbacks.httploop_result = function(url, err, http_stat)
       io.stdout:write("\nI give up...\n")
       io.stdout:flush()
       tries = 0
-      if allowed(url["url"]) then
+      if allowed(url["url"], nil) then
         return wget.actions.ABORT
       else
         return wget.actions.EXIT
@@ -312,16 +391,3 @@ wget.callbacks.before_exit = function(exit_status, exit_status_string)
   return exit_status
 end
 
-wget.callbacks.finish = function(start_time, end_time, wall_time, numurls, total_downloaded_bytes, total_download_time)
-  local file = io.open(item_dir..'/'..warc_file_base..'_data.txt', 'w')
-  for user, _ in pairs(discousers) do
-    file:write("user:" .. user .. "\n")
-  end
-  for video, _ in pairs(discovideos) do
-    file:write("video:" .. video .. "\n")
-  end
-  for tag, _ in pairs(discotags) do
-    file:write("tag:" .. tag .. "\n")
-  end
-  file:close()
-end
