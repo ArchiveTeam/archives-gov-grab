@@ -1,12 +1,10 @@
-myvip-grab
+archives-gov-grab
 =============
 
-More information about the archiving project can be found on the ArchiveTeam wiki: [MyVIP](http://archiveteam.org/index.php?title=MyVIP)
+More information about the archiving project can be found on the ArchiveTeam wiki: [National Archives](http://archiveteam.org/index.php?title=National Archives)
 
 Setup instructions
 =========================
-
-To run this grab you need an account on MyVIP. Create a file named 'account' in the myvip-grab folder. The first line in the file is the e-mailadress used to create the account and the second line the password.
 
 Be sure to replace `YOURNICKHERE` with the nickname that you want to be shown as, on the tracker. You don't need to register it, just pick a nickname you like.
 
@@ -17,7 +15,7 @@ In most of the below cases, there will be a web interface running at http://loca
 Running with a warrior
 -------------------------
 
-This project can not be run with the warrior.
+Follow the [instructions on the ArchiveTeam wiki](http://archiveteam.org/index.php?title=Warrior) for installing the Warrior, and select the "National Archives" project in the Warrior interface.
 
 Running without a warrior
 -------------------------
@@ -58,25 +56,25 @@ Distribution-specific setup
 ### For Debian/Ubuntu:
 
     adduser --system --group --shell /bin/bash archiveteam
-    apt-get update && apt-get install -y git-core libgnutls-dev lua5.1 liblua5.1-0 liblua5.1-0-dev screen python-dev python-pip bzip2 zlib1g-dev
+    apt-get update && apt-get install -y git-core libgnutls-dev lua5.1 liblua5.1-0 liblua5.1-0-dev screen python-dev python-pip bzip2 zlib1g-dev flex autoconf
     pip install --upgrade seesaw
-    su -c "cd /home/archiveteam; git clone https://github.com/ArchiveTeam/myvip-grab.git; cd myvip-grab; ./get-wget-lua.sh" archiveteam
-    screen su -c "cd /home/archiveteam/myvip-grab/; run-pipeline pipeline.py --concurrent 2 --address '127.0.0.1' YOURNICKHERE" archiveteam
+    su -c "cd /home/archiveteam; git clone https://github.com/ArchiveTeam/archives-gov-grab.git; cd archives-gov-grab; ./get-wget-lua.sh" archiveteam
+    screen su -c "cd /home/archiveteam/archives-gov-grab/; run-pipeline pipeline.py --concurrent 2 --address '127.0.0.1' YOURNICKHERE" archiveteam
     [... ctrl+A D to detach ...]
 
 In __Debian Jessie__, the `libgnutls-dev` package was renamed to `libgnutls28-dev`. So, you need to do the following instead:
 
     adduser --system --group --shell /bin/bash archiveteam
-    apt-get update && apt-get install -y git-core libgnutls28-dev lua5.1 liblua5.1-0 liblua5.1-0-dev screen python-dev python-pip bzip2 zlib1g-dev
+    apt-get update && apt-get install -y git-core libgnutls28-dev lua5.1 liblua5.1-0 liblua5.1-0-dev screen python-dev python-pip bzip2 zlib1g-dev flex autoconf
     [... pretty much the same as above ...]
 
 Wget-lua is also available on [ArchiveTeam's PPA](https://launchpad.net/~archiveteam/+archive/wget-lua) for Ubuntu.
 
 ### For CentOS:
 
-Ensure that you have the CentOS equivalent of bzip2 installed as well. You might need the EPEL repository to be enabled.
+Ensure that you have the CentOS equivalent of bzip2 installed as well. You will the EPEL repository to be enabled.
 
-    yum -y install gnutls-devel lua-devel python-pip zlib-devel
+    yum -y install autoconf automake flex gnutls-devel lua-devel python-pip zlib-devel
     pip install --upgrade seesaw
     [... pretty much the same as above ...]
 
@@ -94,7 +92,7 @@ You need Homebrew. Ensure that you have the OS X equivalent of bzip2 installed a
     pip install --upgrade seesaw
     [... pretty much the same as above ...]
 
-**There is a known issue with some packaged versions of rsync. If you get errors during the upload stage, myvip-grab will not work with your rsync version.**
+**There is a known issue with some packaged versions of rsync. If you get errors during the upload stage, archives-gov-grab will not work with your rsync version.**
 
 This supposedly fixes it:
 
@@ -105,11 +103,11 @@ This supposedly fixes it:
 Ensure that you have the Arch equivalent of bzip2 installed as well.
 
 1. Make sure you have `python2-pip` installed.
-2. Install [https://aur.archlinux.org/packages/wget-lua/](the wget-lua package from the AUR). 
+2. Install [the wget-lua package from the AUR](https://aur.archlinux.org/packages/wget-lua/). 
 3. Run `pip2 install --upgrade seesaw`.
 4. Modify the run-pipeline script in seesaw to point at `#!/usr/bin/python2` instead of `#!/usr/bin/python`.
 5. `useradd --system --group users --shell /bin/bash --create-home archiveteam`
-6. `screen su -c "cd /home/archiveteam/myvip-grab/; run-pipeline pipeline.py --concurrent 2 --address '127.0.0.1' YOURNICKHERE" archiveteam`
+6. `screen su -c "cd /home/archiveteam/archives-gov-grab/; run-pipeline pipeline.py --concurrent 2 --address '127.0.0.1' YOURNICKHERE" archiveteam`
 
 ### For FreeBSD:
 
@@ -156,4 +154,5 @@ Are you a developer? Help write code for us! Look at our [developer documentatio
 
 ### Other problems
 
-Have an issue not listed here? Join us on IRC and ask! We can be found at irc.efnet.org #byevip.
+Have an issue not listed here? Join us on IRC and ask! We can be found at irc.efnet.org #archiveteam.
+
